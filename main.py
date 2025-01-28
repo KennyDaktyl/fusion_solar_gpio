@@ -24,8 +24,19 @@ GPIO.output(RELAY_PIN, GPIO.LOW)
 # Konfiguracja logów
 LOG_DIR = "logs"
 os.makedirs(LOG_DIR, exist_ok=True)
-LOG_FILE = os.path.join(LOG_DIR, f"log_{datetime.now().strftime('%Y-%m-%d')}.log")
-logging.basicConfig(filename=LOG_FILE, level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+
+def get_log_file():
+    """Funkcja zwraca ścieżkę do pliku logów na podstawie aktualnej daty."""
+    return os.path.join(LOG_DIR, f"log_{datetime.now().strftime('%Y-%m-%d')}.log")
+
+def setup_logging():
+    """Funkcja konfiguruje logowanie dla aktualnej daty."""
+    log_file = get_log_file()
+    logging.basicConfig(filename=log_file, level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+    return log_file
+
+# Ustawienie początkowego pliku logów
+LOG_FILE = setup_logging()
 
 is_heater_on = False  # Stan grzałki
 start_time = None  # Czas rozpoczęcia pracy grzałki
@@ -38,9 +49,16 @@ def main():
 
     logging.info("Rozpoczynanie pętli logowania i odpytywania...")
     try:
-        global is_heater_on, start_time, logged_in, operation_times, last_email_hour
+        global is_heater_on, start_time, logged_in, operation_times, last_email_hour, LOG_FILE
 
         while True:
+            # Sprawdzenie, czy zmieniła się data i aktualizacja logów
+            current_log_file = get_log_file()
+            if current_log_file != LOG_FILE:
+                logging.info("Zmiana daty. Zmieniamy plik logów.")
+                LOG_FILE = current_log_file
+                setup_logging()  # Re-konfiguracja logowania
+
             # Próba logowania
             if not logged_in:
                 logged_in = login()
@@ -76,6 +94,9 @@ def main():
                 send_email_with_logs(operation_times)
                 last_email_hour = current_hour
                 operation_times = []
+                if os.path.exists(LOG_FILE):
+                    os.remove(LOG_FILE)
+                    logging.info(f"Plik logów {LOG_FILE} został usunięty.")
 
             time.sleep(180)  # Przerwa 3 minuty
     except KeyboardInterrupt:
