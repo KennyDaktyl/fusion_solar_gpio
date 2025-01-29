@@ -10,10 +10,13 @@ services:
       - .:/app 
       - ./logs:/app/logs
       - .env:/app/.env
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
     devices:
       - "/dev/gpiomem:/dev/gpiomem"
     restart: unless-stopped
     environment:
       - DEVICE_ID=${DEVICE_ID}
       - MIN_POWER_TO_ON=${MIN_POWER_TO_ON}
+      - TZ=Europe/Warsaw
     privileged: true
