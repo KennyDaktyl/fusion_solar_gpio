@@ -1,6 +1,7 @@
 # utils.py
 import os
 import logging
+import pytz
 from datetime import datetime
 from email.message import EmailMessage
 import smtplib
@@ -45,3 +46,11 @@ def send_email_with_logs(operation_times):
             logging.info("Logi i zestawienie czasowe wysłane na e-mail.")
     except Exception as e:
         logging.error(f"Błąd podczas wysyłania e-maila: {e}")
+
+
+# Ustawienie strefy czasowej Warszawy
+warsaw_tz = pytz.timezone("Europe/Warsaw")
+
+def get_current_time():
+    """Funkcja zwraca aktualny czas w strefie czasowej Warszawy."""
+    return datetime.now(warsaw_tz)

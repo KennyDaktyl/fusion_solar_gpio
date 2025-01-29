@@ -3,7 +3,7 @@ import logging
 from datetime import datetime
 from get_current_power import get_realtime_data
 from auth import login
-from utils import send_email_with_logs
+from utils import send_email_with_logs, get_current_time
 from dotenv import load_dotenv
 import os
 
@@ -26,8 +26,8 @@ LOG_DIR = "logs"
 os.makedirs(LOG_DIR, exist_ok=True)
 
 def get_log_file():
-    """Funkcja zwraca ścieżkę do pliku logów na podstawie aktualnej daty."""
-    return os.path.join(LOG_DIR, f"log_{datetime.now().strftime('%Y-%m-%d')}.log")
+    """Funkcja zwraca ścieżkę do pliku logów na podstawie aktualnej daty w strefie Warszawy."""
+    return os.path.join(LOG_DIR, f"log_{get_current_time().strftime('%Y-%m-%d')}.log")
 
 def setup_logging():
     """Funkcja konfiguruje logowanie dla aktualnej daty."""
@@ -69,8 +69,8 @@ def main():
 
             # Główna pętla odpytywania
             power = get_realtime_data(device_id)
-            now = datetime.now()
-
+            now = get_current_time()
+            print(f"{now.strftime('%H:%M:%S')} - Moc: {power} kW")
             if power is not None and power > float(os.getenv("MIN_POWER_TO_ON")):
                 if not is_heater_on:
                     GPIO.output(RELAY_PIN, GPIO.HIGH)
