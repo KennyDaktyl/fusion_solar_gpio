@@ -1,11 +1,12 @@
 import time
 import logging
+import os
+import sys
 from datetime import datetime
 from get_current_power import get_realtime_data
 from auth import login
 from utils import send_email_with_logs, get_current_time
 from dotenv import load_dotenv
-import os
 
 # Sprawdzenie dostępności RPi.GPIO
 try:
@@ -25,19 +26,29 @@ GPIO.output(RELAY_PIN, GPIO.LOW)
 LOG_DIR = "logs"
 os.makedirs(LOG_DIR, exist_ok=True)
 
-def get_log_file():
-    """Funkcja zwraca ścieżkę do pliku logów na podstawie aktualnej daty w strefie Warszawy."""
-    return os.path.join(LOG_DIR, f"log_{get_current_time().strftime('%Y-%m-%d')}.log")
-
 def setup_logging():
-    """Funkcja konfiguruje logowanie dla aktualnej daty."""
-    log_file = get_log_file()
-    logging.basicConfig(filename=log_file, level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+    """Konfiguracja logowania z dynamiczną zmianą plików logów po północy."""
+    log_file = os.path.join(LOG_DIR, f"log_{get_current_time().strftime('%Y-%m-%d')}.log")
+
+    # Tworzenie nowego handlera logów
+    handler = logging.FileHandler(log_file)
+    formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
+    handler.setFormatter(formatter)
+
+    # Czyszczenie poprzednich handlerów, aby uniknąć duplikacji logów
+    root_logger = logging.getLogger()
+    root_logger.setLevel(logging.INFO)
+    
+    if root_logger.hasHandlers():
+        root_logger.handlers.clear()
+
+    root_logger.addHandler(handler)
+    logging.info("Konfiguracja logowania zakończona.")
     return log_file
 
-# Ustawienie początkowego pliku logów
 LOG_FILE = setup_logging()
 
+# Zmienne globalne
 is_heater_on = False  # Stan grzałki
 start_time = None  # Czas rozpoczęcia pracy grzałki
 operation_times = []
@@ -45,65 +56,76 @@ logged_in = False
 last_email_hour = None  # Przechowuje godzinę ostatniego wysłania e-maila
 
 def main():
+    global is_heater_on, start_time, logged_in, operation_times, last_email_hour, LOG_FILE
+
     device_id = os.getenv("DEVICE_ID")
+    min_power = float(os.getenv("MIN_POWER_TO_ON", "5"))  # Domyślnie 5 kW, jeśli brak wartości w .env
 
-    logging.info("Rozpoczynanie pętli logowania i odpytywania...")
-    try:
-        global is_heater_on, start_time, logged_in, operation_times, last_email_hour, LOG_FILE
+    logging.info("Uruchamianie aplikacji. Program działa 24/7.")
 
-        while True:
-            # Sprawdzenie, czy zmieniła się data i aktualizacja logów
-            current_log_file = get_log_file()
-            if current_log_file != LOG_FILE:
-                logging.info("Zmiana daty. Zmieniamy plik logów.")
-                LOG_FILE = current_log_file
-                setup_logging()  # Re-konfiguracja logowania
+    while True:
+        try:
+            now = get_current_time()
 
-            # Próba logowania
+            # Zmiana pliku logów po północy
+            current_log_file = os.path.join(LOG_DIR, f"log_{now.strftime('%Y-%m-%d')}.log")
+            if logging.getLogger().handlers[0].baseFilename != current_log_file:
+                logging.info("Zmiana daty. Przełączanie logów na nowy plik.")
+                LOG_FILE = setup_logging()
+
+            # Próba logowania co 5 minut, jeśli jest niezalogowany
             if not logged_in:
+                logging.info("Próba logowania...")
                 logged_in = login()
                 if not logged_in:
-                    logging.error("Nie udało się zalogować. Ponowna próba za 5 minut.")
+                    logging.error("Logowanie nieudane. Ponowna próba za 5 minut.")
                     time.sleep(300)
-                    continue
+                    continue  # Powrót na początek pętli, by ponowić logowanie
 
-            # Główna pętla odpytywania
+            # Pobranie mocy z API
             power = get_realtime_data(device_id)
-            now = get_current_time()
-            print(f"{now.strftime('%H:%M:%S')} - Moc: {power} kW")
-            if power is not None and power > float(os.getenv("MIN_POWER_TO_ON")):
+
+            if power is not None:
+                print(f"{now.strftime('%H:%M:%S')} - Moc: {power} kW")
+                logging.info(f"Aktualna moc: {power} kW")
+            else:
+                logging.warning("Brak danych o mocy. Sprawdzam ponownie za 3 minuty.")
+
+            # Logika sterowania grzałką
+            if power is not None and power > min_power:
                 if not is_heater_on:
                     GPIO.output(RELAY_PIN, GPIO.HIGH)
                     is_heater_on = True
                     start_time = now.strftime('%H:%M')
-                    logging.info("Moc przekracza 5 kW. Włączanie grzałki...")
+                    logging.info(f"Moc przekracza {min_power} kW. Włączanie grzałki...")
             else:
                 if is_heater_on:
                     GPIO.output(RELAY_PIN, GPIO.LOW)
                     is_heater_on = False
                     end_time = now.strftime('%H:%M')
                     operation_times.append((start_time, end_time))
-                    if power:
-                        logging.info(f"Moc poniżej {os.getenv('MIN_POWER_TO_ON')} kW. Wyłączanie grzałki...")
-                    else:
-                        logging.warning("Brak danych mocy. Wyłączanie grzałki...")
+                    logging.info(f"Moc poniżej {min_power} kW. Wyłączanie grzałki...")
 
-            # Wysyłanie logów raz na godzinę
-            current_hour = now.hour
-            if last_email_hour != current_hour:
+            # Wysyłanie e-maila co godzinę
+            if last_email_hour is None or last_email_hour != now.hour:
                 send_email_with_logs(operation_times)
-                last_email_hour = current_hour
-                operation_times = []
-                if os.path.exists(LOG_FILE):
-                    os.remove(LOG_FILE)
-                    logging.info(f"Plik logów {LOG_FILE} został usunięty.")
+                last_email_hour = now.hour
+                operation_times = []  # Reset historii czasów działania
 
-            time.sleep(180)  # Przerwa 3 minuty
-    except KeyboardInterrupt:
-        logging.info("Program zakończony przez użytkownika.")
-    finally:
-        GPIO.output(RELAY_PIN, GPIO.LOW)  # Upewnij się, że grzałka jest wyłączona
-        GPIO.cleanup()
+            time.sleep(180)  # Czekaj 3 minuty przed kolejną iteracją
+
+        except KeyboardInterrupt:
+            logging.info("Program zakończony przez użytkownika.")
+            break
+        except Exception as e:
+            logging.error(f"Nieoczekiwany błąd: {e}")
+            logging.info("Odczekam 60 sekund przed kolejną próbą.")
+            time.sleep(60)  # Krótsza przerwa w razie awarii
+
+    # Sprzątanie zasobów przed zamknięciem programu
+    GPIO.output(RELAY_PIN, GPIO.LOW)
+    GPIO.cleanup()
+    sys.exit(0)
 
 if __name__ == "__main__":
     main()

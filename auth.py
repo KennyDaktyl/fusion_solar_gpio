@@ -1,4 +1,3 @@
-# auth.py
 import requests
 import json
 import logging
@@ -26,8 +25,10 @@ def login():
     headers = {
         "Content-Type": "application/json"
     }
+
     try:
         response = session.post(url, data=json.dumps(payload), headers=headers)
+        
         if response.status_code == 200:
             result = response.json()
             if result.get("success"):
@@ -35,11 +36,12 @@ def login():
                 session.headers.update({"XSRF-TOKEN": session.cookies.get("XSRF-TOKEN")})
                 return True
             else:
-                logging.error(f"Błąd podczas logowania: {result.get('message')}")
-                return False
+                logging.warning(f"Błąd logowania: {result.get('message')}")
+        
         else:
-            logging.error(f"Błąd podczas logowania: {response.json()}")
-            return False
-    except Exception as e:
-        logging.error(f"Wyjątek podczas logowania: {e}")
-        return False
+            logging.error(f"Błąd logowania HTTP {response.status_code}: {response.text}")
+
+    except requests.exceptions.RequestException as e:
+        logging.error(f"Nie udało się połączyć z API: {e}")
+
+    return False  # Zwróć False jeśli logowanie się nie udało
