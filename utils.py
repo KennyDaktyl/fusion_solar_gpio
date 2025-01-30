@@ -54,3 +54,15 @@ warsaw_tz = pytz.timezone("Europe/Warsaw")
 def get_current_time():
     """Funkcja zwraca aktualny czas w strefie czasowej Warszawy."""
     return datetime.now(warsaw_tz)
+
+
+def disable_heater(GPIO, RELAY_PIN, is_heater_on, operation_times, start_time):
+    """Wyłącza grzałkę i zapisuje czas wyłączenia."""
+    if is_heater_on:
+        GPIO.output(RELAY_PIN, GPIO.LOW)
+        end_time = datetime.now().strftime("%H:%M:%S")
+        operation_times.append((start_time, end_time))
+        logging.info(f"Grzałka wyłączona o {end_time}")
+        is_heater_on = False
+        print(f"{end_time} - Wyłączanie grzałki...")
+    return is_heater_on

@@ -17,7 +17,6 @@ def get_realtime_data(device_id):
 
     while True:
         try:
-            logging.info("Wysyłanie żądania do API...")
             response = session.post(url, data=json.dumps(payload), timeout=10)
             response.raise_for_status()  # Rzuci wyjątek dla błędów HTTP (4xx, 5xx)
             

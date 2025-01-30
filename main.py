@@ -2,10 +2,9 @@ import time
 import logging
 import os
 import sys
-from datetime import datetime
 from get_current_power import get_realtime_data
 from auth import login
-from utils import send_email_with_logs, get_current_time
+from utils import send_email_with_logs, get_current_time, disable_heater
 from dotenv import load_dotenv
 
 # Sprawdzenie dostępności RPi.GPIO
@@ -36,7 +35,6 @@ def setup_logging():
     now = get_current_time()
     log_date = now.strftime('%Y-%m-%d')
 
-    # Przełączanie logów tylko jeśli zmieniła się data
     if log_date == current_log_date:
         return  
 
@@ -50,7 +48,6 @@ def setup_logging():
     root_logger = logging.getLogger()
     root_logger.setLevel(logging.INFO)
 
-    # Usunięcie poprzednich handlerów (zapobiega duplikacji logów)
     if root_logger.hasHandlers():
         root_logger.handlers.clear()
 
@@ -81,7 +78,8 @@ def main():
             power = get_realtime_data(device_id)
 
             if power is None:
-                logging.warning("Brak danych z API. Możliwe, że sesja wygasła.")
+                is_heater_on = disable_heater(GPIO, RELAY_PIN, is_heater_on, operation_times, start_time)
+                logging.warning("Brak danych z API. Wyłączam grzałkę.")
                 if not logged_in:
                     logging.info("Sesja wygasła. Próba ponownego logowania...")
                     logged_in = login()
@@ -97,14 +95,13 @@ def main():
             else:
                 if 6 <= now.hour < 22:
                     logging.info(f"Aktualna produkcja mocy: {power} kW")
+                print(f"{now.strftime('%H:%M:%S')} - Moc: {power} kW")
                 
             # Reset licznika nieudanych prób, jeśli dane są dostępne
             failed_login_attempts = 0
 
-            print(f"{now.strftime('%H:%M:%S')} - Moc: {power} kW")
-
             # Logika sterowania grzałką
-            if power > min_power:
+            if power is not None and power > min_power:
                 if not is_heater_on:
                     GPIO.output(RELAY_PIN, GPIO.HIGH)
                     is_heater_on = True
@@ -112,12 +109,7 @@ def main():
                     logging.info(f"Moc {power} kW. Włączanie grzałki...")
                     print(f"{now.strftime('%H:%M:%S')} - Włączanie grzałki...")
             elif is_heater_on:
-                GPIO.output(RELAY_PIN, GPIO.LOW)
-                is_heater_on = False
-                end_time = now.strftime('%H:%M')
-                operation_times.append((start_time, end_time))
-                logging.info(f"Moc spadła poniżej {min_power} kW. Wyłączanie grzałki.")
-                print(f"{now.strftime('%H:%M:%S')} - Wyłączanie grzałki.")
+                is_heater_on = disable_heater(GPIO, RELAY_PIN, is_heater_on, operation_times, start_time)
 
             if now.hour >= 22 and not email_sent:
                 send_email_with_logs(operation_times)
@@ -133,8 +125,9 @@ def main():
             logging.info("Program zakończony przez użytkownika.")
             break
         except Exception as e:
+            is_heater_on = disable_heater(GPIO, RELAY_PIN, is_heater_on, operation_times, start_time)
             logging.error(f"Nieoczekiwany błąd: {e}")
-            logging.info("Odczekam 60 sekund przed kolejną próbą.")
+            logging.warning("Wyłączam grzałkę i oczekuję 60 sekund przed kolejną próbą.")
             time.sleep(60)  # Krótsza przerwa w razie awarii
 
     # Sprzątanie zasobów przed zamknięciem programu
