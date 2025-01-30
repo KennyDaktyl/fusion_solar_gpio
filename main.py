@@ -62,10 +62,10 @@ is_heater_on = False
 start_time = None
 operation_times = []
 logged_in = False
-last_email_hour = None
+email_sent = False
 
 def main():
-    global is_heater_on, start_time, logged_in, operation_times, last_email_hour, failed_login_attempts
+    global is_heater_on, start_time, logged_in, operation_times, email_sent, failed_login_attempts
 
     device_id = os.getenv("DEVICE_ID")
     min_power = float(os.getenv("MIN_POWER_TO_ON", "5"))  # Domyślnie 5 kW, jeśli brak wartości w .env
@@ -94,12 +94,14 @@ def main():
 
                     failed_login_attempts = 0  # Zresetowanie licznika, jeśli logowanie się powiodło
                     continue  # Powtarzamy iterację, aby pobrać dane po zalogowaniu
-
+            else:
+                if 6 <= now.hour < 22:
+                    logging.info(f"Aktualna produkcja mocy: {power} kW")
+                
             # Reset licznika nieudanych prób, jeśli dane są dostępne
             failed_login_attempts = 0
 
             print(f"{now.strftime('%H:%M:%S')} - Moc: {power} kW")
-            logging.info(f"Aktualna moc: {power} kW")
 
             # Logika sterowania grzałką
             if power > min_power:
@@ -117,12 +119,13 @@ def main():
                 logging.info(f"Moc spadła poniżej {min_power} kW. Wyłączanie grzałki.")
                 print(f"{now.strftime('%H:%M:%S')} - Wyłączanie grzałki.")
 
-            # Wysyłanie e-maila co godzinę
-            if last_email_hour is None or last_email_hour != now.hour:
+            if now.hour >= 22 and not email_sent:
                 send_email_with_logs(operation_times)
-                last_email_hour = now.hour
-                print(operation_times)
-                operation_times = []  # Reset historii czasów działania
+                email_sent = True  # Oznacz, że e-mail został wysłany
+                operation_times = []
+
+            if now.hour < 22:
+                email_sent = False  # Reset flagi po północy
 
             time.sleep(180)  # Czekaj 3 minuty przed kolejną iteracją
 

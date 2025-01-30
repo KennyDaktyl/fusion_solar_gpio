@@ -1,6 +1,7 @@
 import logging
 import json
 import time
+import requests  # Dodanie obsługi błędów HTTP
 from auth import session, login, BASE_URL
 
 def get_realtime_data(device_id):
@@ -16,38 +17,51 @@ def get_realtime_data(device_id):
 
     while True:
         try:
-            response = session.post(url, data=json.dumps(payload))
+            logging.info("Wysyłanie żądania do API...")
+            response = session.post(url, data=json.dumps(payload), timeout=10)
+            response.raise_for_status()  # Rzuci wyjątek dla błędów HTTP (4xx, 5xx)
             
-            if response.status_code == 200:
-                result = response.json()
-                
-                if result.get("success"):
-                    data = result.get("data", [])
-                    if data:
-                        current_power = data[0]["dataItemMap"].get("active_power", 0)
-                        logging.info(f"Aktualna produkcja mocy: {current_power} kW")
-                        return current_power
-                    else:
-                        logging.warning("Brak danych dla podanego urządzenia.")
-                        return None
-                
-                elif result.get("message") == "USER_MUST_RELOGIN":
-                    logging.warning("Sesja wygasła. Próba ponownego logowania...")
-                    if login():
-                        continue  # Po zalogowaniu spróbuj ponownie pobrać dane
-                    else:
-                        logging.error("Nie udało się ponownie zalogować. Odczekam 5 minut.")
-                        return None  # `main.py` sam ponowi próbę logowania
-                    
+            result = response.json()
+            
+            if result.get("success"):
+                data = result.get("data", [])
+                if data:
+                    current_power = data[0]["dataItemMap"].get("active_power", 0)
+                    return current_power
                 else:
-                    logging.error(f"Błąd API: {result.get('message')}")
+                    logging.warning("Brak danych dla podanego urządzenia.")
                     return None
-
+            
+            elif result.get("message") == "USER_MUST_RELOGIN":
+                logging.warning("Sesja wygasła. Próba ponownego logowania...")
+                if login():
+                    continue  # Po zalogowaniu ponów próbę pobrania danych
+                else:
+                    logging.error("Nie udało się ponownie zalogować. Odczekam 5 minut.")
+                    time.sleep(300)  # 5 minut oczekiwania przed kolejną próbą
+                    return None
+            
             else:
-                logging.error(f"Błąd HTTP {response.status_code}: {response.text}")
+                logging.error(f"Błąd API: {result.get('message')}")
                 return None
 
+        except requests.exceptions.Timeout:
+            logging.error("Przekroczono czas oczekiwania na odpowiedź API.")
+            time.sleep(60)  # 1 minuta przerwy
+            return None
+        
+        except requests.exceptions.ConnectionError:
+            logging.error("Brak połączenia z internetem! Sprawdzam ponownie za 5 minut.")
+            time.sleep(300)  # 5 minut przerwy przed kolejną próbą
+            return None
+        
+        except requests.exceptions.RequestException as e:
+            logging.error(f"Błąd HTTP: {e}")
+            time.sleep(60)  # 1 minuta przerwy przed kolejną próbą
+            return None
+        
         except Exception as e:
-            logging.error(f"Wyjątek podczas pobierania danych produkcji: {e}")
+            logging.error(f"Nieoczekiwany błąd: {e}")
             logging.info("Odczekam 60 sekund przed kolejną próbą.")
             time.sleep(60)  # Krótsze oczekiwanie w przypadku awarii
+            return None

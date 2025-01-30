@@ -27,21 +27,26 @@ def login():
     }
 
     try:
-        response = session.post(url, data=json.dumps(payload), headers=headers)
+        logging.info("Próba logowania do API FusionSolar...")
+        response = session.post(url, data=json.dumps(payload), headers=headers, timeout=10)
+        response.raise_for_status()  # Rzuca wyjątek dla błędów HTTP (4xx, 5xx)
         
-        if response.status_code == 200:
-            result = response.json()
-            if result.get("success"):
-                logging.info("Logowanie udane.")
-                session.headers.update({"XSRF-TOKEN": session.cookies.get("XSRF-TOKEN")})
-                return True
-            else:
-                logging.warning(f"Błąd logowania: {result.get('message')}")
-        
+        result = response.json()
+        if result.get("success"):
+            logging.info("Logowanie udane.")
+            session.headers.update({"XSRF-TOKEN": session.cookies.get("XSRF-TOKEN")})
+            return True
         else:
-            logging.error(f"Błąd logowania HTTP {response.status_code}: {response.text}")
-
+            logging.warning(f"Błąd logowania: {result.get('message')}")
+    
+    except requests.exceptions.Timeout:
+        logging.error("Przekroczono czas oczekiwania na logowanie do API.")
+        return False
+    except requests.exceptions.ConnectionError:
+        logging.error("Brak połączenia z internetem! Nie można zalogować się do API.")
+        return False
     except requests.exceptions.RequestException as e:
-        logging.error(f"Nie udało się połączyć z API: {e}")
-
+        logging.error(f"Błąd logowania: {e}")
+        return False
+    
     return False  # Zwróć False jeśli logowanie się nie udało
