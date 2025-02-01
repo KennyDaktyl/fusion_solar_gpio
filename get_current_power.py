@@ -26,7 +26,7 @@ def get_realtime_data(device_id):
                 data = result.get("data", [])
                 if data:
                     current_power = data[0]["dataItemMap"].get("active_power", 0)
-                    return current_power
+                    return float(round(current_power, 2))
                 else:
                     logging.warning("Brak danych dla podanego urządzenia.")
                     return None
@@ -37,7 +37,7 @@ def get_realtime_data(device_id):
                     continue  # Po zalogowaniu ponów próbę pobrania danych
                 else:
                     logging.error("Nie udało się ponownie zalogować. Odczekam 5 minut.")
-                    time.sleep(300)  # 5 minut oczekiwania przed kolejną próbą
+                    # time.sleep(300)  # 5 minut oczekiwania przed kolejną próbą
                     return None
             
             else:
@@ -46,21 +46,21 @@ def get_realtime_data(device_id):
 
         except requests.exceptions.Timeout:
             logging.error("Przekroczono czas oczekiwania na odpowiedź API.")
-            time.sleep(60)  # 1 minuta przerwy
+            # time.sleep(60)  # 1 minuta przerwy
             return None
         
         except requests.exceptions.ConnectionError:
             logging.error("Brak połączenia z internetem! Sprawdzam ponownie za 5 minut.")
-            time.sleep(300)  # 5 minut przerwy przed kolejną próbą
+            # time.sleep(300)  # 5 minut przerwy przed kolejną próbą
             return None
         
         except requests.exceptions.RequestException as e:
             logging.error(f"Błąd HTTP: {e}")
-            time.sleep(60)  # 1 minuta przerwy przed kolejną próbą
+            # time.sleep(60)  # 1 minuta przerwy przed kolejną próbą
             return None
         
         except Exception as e:
             logging.error(f"Nieoczekiwany błąd: {e}")
-            logging.info("Odczekam 60 sekund przed kolejną próbą.")
-            time.sleep(60)  # Krótsze oczekiwanie w przypadku awarii
+            # logging.info("Odczekam 60 sekund przed kolejną próbą.")
+            # time.sleep(60)  # Krótsze oczekiwanie w przypadku awarii
             return None

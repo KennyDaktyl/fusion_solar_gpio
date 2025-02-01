@@ -45,6 +45,9 @@ def setup_logging():
     formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
     handler.setFormatter(formatter)
 
+    console_handler = logging.StreamHandler(sys.stdout)
+    console_handler.setFormatter(formatter)
+
     root_logger = logging.getLogger()
     root_logger.setLevel(logging.INFO)
 
@@ -52,6 +55,7 @@ def setup_logging():
         root_logger.handlers.clear()
 
     root_logger.addHandler(handler)
+    root_logger.addHandler(console_handler)
     logging.info(f"Logowanie skonfigurowane na plik: {log_file}")
 
 # Zmienne globalne
@@ -79,15 +83,18 @@ def main():
 
             if power is None:
                 is_heater_on = disable_heater(GPIO, RELAY_PIN, is_heater_on, operation_times, start_time)
-                logging.warning("Brak danych z API. Wyłączam grzałkę.")
+                logging.warning("Brak danych z API.")
+                if is_heater_on:
+                    logging.warning("Wyłączanie grzałki...")
                 if not logged_in:
-                    logging.info("Sesja wygasła. Próba ponownego logowania...")
+                    logging.warning("Sesja wygasła. Próba ponownego logowania...")
                     logged_in = login()
 
                     if not logged_in:
                         failed_login_attempts += 1
-                        logging.error(f"Logowanie nieudane. Próba {failed_login_attempts}/3. Czekam 5 minut.")
-                        time.sleep(600 if failed_login_attempts >= 3 else 300)
+                        time_sleep = 600 if failed_login_attempts >= 3 else 300
+                        logging.error(f"Logowanie nieudane. Próba {failed_login_attempts}/3. Czekam {time_sleep/60} minut.")
+                        time.sleep(time_sleep)
                         continue
 
                     failed_login_attempts = 0  # Zresetowanie licznika, jeśli logowanie się powiodło

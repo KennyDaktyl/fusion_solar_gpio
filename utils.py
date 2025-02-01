@@ -60,7 +60,7 @@ def disable_heater(GPIO, RELAY_PIN, is_heater_on, operation_times, start_time):
     """Wyłącza grzałkę i zapisuje czas wyłączenia."""
     if is_heater_on:
         GPIO.output(RELAY_PIN, GPIO.LOW)
-        end_time = datetime.now().strftime("%H:%M:%S")
+        end_time = datetime.now().strftime("%H:%M")
         operation_times.append((start_time, end_time))
         logging.info(f"Grzałka wyłączona o {end_time}")
         is_heater_on = False
