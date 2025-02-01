@@ -103,7 +103,7 @@ def main():
                 if 6 <= now.hour < 22:
                     logging.info(f"Aktualna produkcja mocy: {power} kW")
                 print(f"{now.strftime('%H:%M:%S')} - Moc: {power} kW")
-                
+            logging.info(f"Status grzałki: {'WŁĄCZONA' if is_heater_on else 'WYŁĄCZONA'}")
             # Reset licznika nieudanych prób, jeśli dane są dostępne
             failed_login_attempts = 0
 
