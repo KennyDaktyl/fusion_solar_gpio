@@ -26,7 +26,7 @@ def get_realtime_data(device_id):
                 if data:
                     current_power = data[0]["dataItemMap"].get("active_power", 0)
                     if current_power is not None:
-                        current_power = round(float((current_power) / 1000), 2)  # Przeliczenie na kW
+                        current_power = round(float(current_power), 2)  # Przeliczenie na kW
                     return True, current_power
                 else:
                     logging.warning("Brak danych dla podanego urządzenia.")
