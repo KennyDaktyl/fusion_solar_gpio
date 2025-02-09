@@ -2,6 +2,7 @@ import time
 import logging
 import os
 import sys
+from db import create_table, save_reading
 from get_current_power import get_realtime_data
 from auth import login
 from utils import send_email_with_logs, get_current_time, disable_heater
@@ -72,15 +73,18 @@ def main():
     min_power = float(os.getenv("MIN_POWER_TO_ON", "5"))  # Domyślnie 5 kW, jeśli brak wartości w .env
 
     logging.info("Uruchamianie aplikacji. Program działa 24/7.")
-
+    create_table() 
+    
     while True:
         try:
             now = get_current_time()
             setup_logging()  # Przełączanie logów tylko raz na dobę
 
             # Pobranie mocy z API
-            power = get_realtime_data(device_id)
-
+            status, power = get_realtime_data(device_id)
+            save_reading(status, power)
+            logging.info(f"Zapisano: status={status}, power={power} kW")
+            
             if power is None:
                 is_heater_on = disable_heater(GPIO, RELAY_PIN, is_heater_on, operation_times, start_time)
                 logging.warning("Brak danych z API.")
@@ -102,7 +106,7 @@ def main():
             else:
                 if 6 <= now.hour < 22:
                     logging.info(f"Aktualna produkcja mocy: {power} kW")
-            logging.info(f"Status grzałki: {'WŁĄCZONA' if is_heater_on else 'WYŁĄCZONA'}")
+                    logging.info(f"Status grzałki: {'WŁĄCZONA' if is_heater_on else 'WYŁĄCZONA'}")
             # Reset licznika nieudanych prób, jeśli dane są dostępne
             failed_login_attempts = 0
 

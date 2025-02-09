@@ -1,6 +1,5 @@
 import logging
 import json
-import time
 import requests  # Dodanie obsługi błędów HTTP
 from auth import session, login, BASE_URL
 
@@ -26,10 +25,12 @@ def get_realtime_data(device_id):
                 data = result.get("data", [])
                 if data:
                     current_power = data[0]["dataItemMap"].get("active_power", 0)
-                    return float(round(current_power, 2))
+                    if current_power is not None:
+                        current_power = float(current_power) / 1000  # Przeliczenie na kW
+                    return True, current_power
                 else:
                     logging.warning("Brak danych dla podanego urządzenia.")
-                    return None
+                    return False, None
             
             elif result.get("message") == "USER_MUST_RELOGIN":
                 logging.warning("Sesja wygasła. Próba ponownego logowania...")
@@ -38,29 +39,29 @@ def get_realtime_data(device_id):
                 else:
                     logging.error("Nie udało się ponownie zalogować. Odczekam 5 minut.")
                     # time.sleep(300)  # 5 minut oczekiwania przed kolejną próbą
-                    return None
+                    return False, None
             
             else:
                 logging.error(f"Błąd API: {result.get('message')}")
-                return None
+                return False, None
 
         except requests.exceptions.Timeout:
             logging.error("Przekroczono czas oczekiwania na odpowiedź API.")
             # time.sleep(60)  # 1 minuta przerwy
-            return None
+            return False, None
         
         except requests.exceptions.ConnectionError:
             logging.error("Brak połączenia z internetem! Sprawdzam ponownie za 5 minut.")
             # time.sleep(300)  # 5 minut przerwy przed kolejną próbą
-            return None
+            return False, None
         
         except requests.exceptions.RequestException as e:
             logging.error(f"Błąd HTTP: {e}")
             # time.sleep(60)  # 1 minuta przerwy przed kolejną próbą
-            return None
+            return False, None
         
         except Exception as e:
             logging.error(f"Nieoczekiwany błąd: {e}")
             # logging.info("Odczekam 60 sekund przed kolejną próbą.")
             # time.sleep(60)  # Krótsze oczekiwanie w przypadku awarii
-            return None
+            return False, None
