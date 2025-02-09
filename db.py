@@ -5,7 +5,6 @@ from config import DB_CONFIG
 def get_db_connection():
     """Nawiązuje połączenie z bazą danych PostgreSQL."""
     try:
-        print(DB_CONFIG)
         conn = psycopg2.connect(**DB_CONFIG)
         return conn
     except psycopg2.Error as e:
@@ -39,7 +38,7 @@ def save_reading(status, power):
         try:
             with conn.cursor() as cur:
                 cur.execute("""
-                    INSERT INTO power_monitoring (status, power) 
+                    INSERT INTO power_monitoring (status, current_power) 
                     VALUES (%s, %s);
                 """, (status, power))
                 conn.commit()
