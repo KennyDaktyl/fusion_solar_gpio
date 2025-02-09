@@ -5,8 +5,8 @@ from config import DB_CONFIG
 def get_db_connection():
     """Nawiązuje połączenie z bazą danych PostgreSQL."""
     try:
-        conn = psycopg2.connect(**DB_CONFIG)
         print(DB_CONFIG)
+        conn = psycopg2.connect(**DB_CONFIG)
         return conn
     except psycopg2.Error as e:
         logging.error(f"Błąd połączenia z bazą danych: {e}")
